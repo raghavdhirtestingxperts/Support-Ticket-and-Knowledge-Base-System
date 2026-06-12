@@ -1,0 +1,15 @@
+node_modules/
+bin/
+obj/
+.vs/
+*.mdf
+*.ldf
+*.db
+*.sqlite
+appsettings.Development.json
+appsettings.Production.json
+secrets.json
+.env
+.env.local
+.env.development
+.env.production
