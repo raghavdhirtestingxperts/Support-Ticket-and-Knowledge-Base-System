@@ -1,0 +1,32 @@
+using SupportTicketAPI.Models;
+
+namespace SupportTicketAPI.Services;
+
+public interface ISlaService
+{
+    DateTime CalculateDeadline(TicketPriority priority, DateTime createdAt);
+
+    bool IsBreached(DateTime slaDeadline);
+
+    int HoursForPriority(TicketPriority priority);
+}
+
+public class SlaService : ISlaService
+{
+    private static readonly Dictionary<TicketPriority, int> SlaHours = new()
+    {
+        { TicketPriority.Critical, 2  },
+        { TicketPriority.High,     8  },
+        { TicketPriority.Medium,   24 },
+        { TicketPriority.Low,      72 }
+    };
+
+    public int HoursForPriority(TicketPriority priority)
+        => SlaHours[priority];
+
+    public DateTime CalculateDeadline(TicketPriority priority, DateTime createdAt)
+        => createdAt.AddHours(HoursForPriority(priority));
+
+    public bool IsBreached(DateTime slaDeadline)
+        => DateTime.UtcNow > slaDeadline;
+}

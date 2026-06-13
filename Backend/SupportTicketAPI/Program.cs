@@ -35,6 +35,10 @@ builder.Services.AddAuthorization();
 
 // Register application services
 builder.Services.AddScoped<IAuthService,     AuthService>();
+builder.Services.AddScoped<ISlaService,      SlaService>();
+builder.Services.AddScoped<ITicketService,   TicketService>();
+builder.Services.AddScoped<IKbService,       KbService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Add controllers
 builder.Services.AddControllers();
