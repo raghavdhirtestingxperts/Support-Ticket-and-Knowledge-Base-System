@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
 
-// handles user authentication and registration
+// handles user authentication and registration on separate screens
 export default function Login() {
   const navigate = useNavigate();
+
+  const [isRegistering, setIsRegistering] = useState(false);
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -16,6 +18,23 @@ export default function Login() {
   const [regRole, setRegRole] = useState('Customer');
   const [regError, setRegError] = useState('');
   const [regSuccess, setRegSuccess] = useState('');
+
+  // clear credentials and errors when switching views
+  const resetFormStates = () => {
+    setLoginEmail('');
+    setLoginPassword('');
+    setRegName('');
+    setRegEmail('');
+    setRegPassword('');
+    setRegRole('Customer');
+    setLoginError('');
+    setRegError('');
+    setRegSuccess('');
+  };
+
+  useEffect(() => {
+    resetFormStates();
+  }, []);
 
   // submit login request
   const handleLogin = async (e) => {
@@ -78,44 +97,22 @@ export default function Login() {
       setRegEmail('');
       setRegPassword('');
       setRegRole('Customer');
+      // toggle view back to login after short delay or direct
+      setTimeout(() => {
+        setIsRegistering(false);
+      }, 1500);
     } catch (err) {
       setRegError(err.message);
     }
   };
 
-  return (
-    <div className="dashboard-grid">
-      <div className="dashboard-col">
-        <h2>Login</h2>
-        {loginError && <p className="error-msg">{loginError}</p>}
-        <form onSubmit={handleLogin}>
-          <div className="form-group">
-            <label>Email Address</label>
-            <input
-              type="email"
-              value={loginEmail}
-              onChange={(e) => setLoginEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input
-              type="password"
-              value={loginPassword}
-              onChange={(e) => setLoginPassword(e.target.value)}
-              required
-            />
-          </div>
-          <button type="submit">Sign In</button>
-        </form>
-      </div>
-
-      <div className="dashboard-col">
+  if (isRegistering) {
+    return (
+      <div style={{ maxWidth: '400px', margin: '40px auto' }}>
         <h2>Register</h2>
         {regError && <p className="error-msg">{regError}</p>}
         {regSuccess && <p className="success-msg">{regSuccess}</p>}
-        <form onSubmit={handleRegister}>
+        <form onSubmit={handleRegister} style={{ maxWidth: '100%' }}>
           <div className="form-group">
             <label>Full Name</label>
             <input
@@ -123,6 +120,7 @@ export default function Login() {
               value={regName}
               onChange={(e) => setRegName(e.target.value)}
               required
+              autoComplete="new-name"
             />
           </div>
           <div className="form-group">
@@ -132,6 +130,7 @@ export default function Login() {
               value={regEmail}
               onChange={(e) => setRegEmail(e.target.value)}
               required
+              autoComplete="new-email"
             />
           </div>
           <div className="form-group">
@@ -141,6 +140,7 @@ export default function Login() {
               value={regPassword}
               onChange={(e) => setRegPassword(e.target.value)}
               required
+              autoComplete="new-password"
             />
           </div>
           <div className="form-group">
@@ -153,6 +153,44 @@ export default function Login() {
           </div>
           <button type="submit">Register Account</button>
         </form>
+        <div style={{ marginTop: '15px' }}>
+          <span>Already have an account? </span>
+          <a onClick={() => { resetFormStates(); setIsRegistering(false); }}>Move to Login</a>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: '400px', margin: '40px auto' }}>
+      <h2>Login</h2>
+      {loginError && <p className="error-msg">{loginError}</p>}
+      <form onSubmit={handleLogin} style={{ maxWidth: '100%' }}>
+        <div className="form-group">
+          <label>Email Address</label>
+          <input
+            type="email"
+            value={loginEmail}
+            onChange={(e) => setLoginEmail(e.target.value)}
+            required
+            autoComplete="username"
+          />
+        </div>
+        <div className="form-group">
+          <label>Password</label>
+          <input
+            type="password"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+        </div>
+        <button type="submit">Sign In</button>
+      </form>
+      <div style={{ marginTop: '15px' }}>
+        <span>Don't have an account? </span>
+        <a onClick={() => { resetFormStates(); setIsRegistering(true); }}>Move to Signup</a>
       </div>
     </div>
   );
