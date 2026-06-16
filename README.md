@@ -9,7 +9,7 @@ A full-stack application built with ASP.NET Core and React for managing support 
 ### 1. Authentication and Authorization
 * Role-based access control with three system roles: Customer, Agent, and Supervisor.
 * Secure JWT bearer authentication.
-* Registration portal allows users to signup under their selected system role.
+* Access via pre-seeded accounts for demo roles (registration is disabled).
 
 ### 2. Support Ticket Management
 * Customers can submit support tickets with a title, description, and priority level.
@@ -103,7 +103,9 @@ A full-stack application built with ASP.NET Core and React for managing support 
 ---
 
 ## Seed Data Accounts
-The application database initializes with three test accounts (all passwords are set to "password"):
-* Customer: `alice@demo.com`
-* Agent: `bob@demo.com`
-* Supervisor: `carol@demo.com`
+The application database initializes with five test accounts (all passwords are set to "Password123!") to demonstrate all roles:
+* Customer: `alice@demo.com` (Alice)
+* Customer: `banni@gmail.com` (Banni)
+* Customer: `manav@gmail.com` (Manav)
+* Agent: `bob@demo.com` (Bob)
+* Supervisor: `carol@demo.com` (Carol)
