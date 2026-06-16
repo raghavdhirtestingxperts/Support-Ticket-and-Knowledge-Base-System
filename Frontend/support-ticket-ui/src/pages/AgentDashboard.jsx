@@ -54,8 +54,8 @@ export default function AgentDashboard() {
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="">All Statuses</option>
               <option value="Open">Open</option>
-              <option value="In Progress">In Progress</option>
-              <option value="Pending Customer">Pending Customer</option>
+              <option value="InProgress">In Progress</option>
+              <option value="PendingCustomer">Pending Customer</option>
               <option value="Resolved">Resolved</option>
               <option value="Closed">Closed</option>
             </select>

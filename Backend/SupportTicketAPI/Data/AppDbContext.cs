@@ -105,7 +105,7 @@ public class AppDbContext : DbContext
             new User
             {
                 Id = 1,
-                Name = "Alice Smith",
+                Name = "Alice",
                 Email = "alice@demo.com",
                 PasswordHash = passwordHash,
                 Role = UserRole.Customer,
@@ -115,7 +115,17 @@ public class AppDbContext : DbContext
             new User
             {
                 Id = 2,
-                Name = "Bob Jones",
+                Name = "Banni",
+                Email = "banni@gmail.com",
+                PasswordHash = passwordHash,
+                Role = UserRole.Customer,
+                TenantId = "default",
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = 3,
+                Name = "Bob",
                 Email = "bob@demo.com",
                 PasswordHash = passwordHash,
                 Role = UserRole.Agent,
@@ -124,8 +134,18 @@ public class AppDbContext : DbContext
             },
             new User
             {
-                Id = 3,
-                Name = "Carol Davis",
+                Id = 4,
+                Name = "Manav",
+                Email = "manav@gmail.com",
+                PasswordHash = passwordHash,
+                Role = UserRole.Customer,
+                TenantId = "default",
+                CreatedAt = now
+            },
+            new User
+            {
+                Id = 5,
+                Name = "Carol",
                 Email = "carol@demo.com",
                 PasswordHash = passwordHash,
                 Role = UserRole.Supervisor,
@@ -160,7 +180,7 @@ public class AppDbContext : DbContext
                 SlaDeadline = now.AddHours(-1),
                 IsSlaBreached = true,
                 CreatedByUserId = 1,
-                AssignedToUserId = 2
+                AssignedToUserId = 3
             },
             new Ticket
             {
@@ -173,7 +193,7 @@ public class AppDbContext : DbContext
                 SlaDeadline = now.AddDays(-2).AddHours(72),
                 IsSlaBreached = false,
                 CreatedByUserId = 1,
-                AssignedToUserId = 2
+                AssignedToUserId = 3
             },
             new Ticket
             {
@@ -186,7 +206,7 @@ public class AppDbContext : DbContext
                 SlaDeadline = now.AddDays(-1).AddHours(24),
                 IsSlaBreached = false,
                 CreatedByUserId = 1,
-                AssignedToUserId = 2
+                AssignedToUserId = 3
             },
             new Ticket
             {
@@ -213,7 +233,7 @@ public class AppDbContext : DbContext
                 NewStatus = TicketStatus.InProgress,
                 Note = "Assigned to Bob. Checking payment gateway logs.",
                 ChangedAt = now.AddHours(-2),
-                ChangedByUserId = 2
+                ChangedByUserId = 3
             },
             new TicketHistory
             {
@@ -223,7 +243,7 @@ public class AppDbContext : DbContext
                 NewStatus = TicketStatus.InProgress,
                 Note = "Investigating email logs.",
                 ChangedAt = now.AddDays(-2).AddHours(1),
-                ChangedByUserId = 2
+                ChangedByUserId = 3
             },
             new TicketHistory
             {
@@ -233,7 +253,7 @@ public class AppDbContext : DbContext
                 NewStatus = TicketStatus.Resolved,
                 Note = "Manually triggered reset link.",
                 ChangedAt = now.AddDays(-1),
-                ChangedByUserId = 2
+                ChangedByUserId = 3
             }
         );
 
@@ -247,7 +267,7 @@ public class AppDbContext : DbContext
                 Tags = "password,reset",
                 CreatedAt = now.AddDays(-5),
                 UpdatedAt = null,
-                CreatedByUserId = 2
+                CreatedByUserId = 3
             },
             new KnowledgeBaseArticle
             {
@@ -257,7 +277,7 @@ public class AppDbContext : DbContext
                 Tags = "sla,priority",
                 CreatedAt = now.AddDays(-3),
                 UpdatedAt = null,
-                CreatedByUserId = 2
+                CreatedByUserId = 3
             }
         );
     }

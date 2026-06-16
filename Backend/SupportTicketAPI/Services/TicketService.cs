@@ -88,7 +88,7 @@ public class TicketService : ITicketService
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(status) &&
-            Enum.TryParse<TicketStatus>(status, ignoreCase: true, out var s))
+            Enum.TryParse<TicketStatus>(status.Replace(" ", ""), ignoreCase: true, out var s))
             query = query.Where(t => t.Status == s);
 
         if (!string.IsNullOrWhiteSpace(priority) &&
@@ -136,7 +136,7 @@ public class TicketService : ITicketService
 
     public async Task<TicketResponseDto?> UpdateStatusAsync(int ticketId, UpdateStatusDto dto, int requestingUserId)
     {
-        if (!Enum.TryParse<TicketStatus>(dto.NewStatus, ignoreCase: true, out var newStatus))
+        if (!Enum.TryParse<TicketStatus>(dto.NewStatus.Replace(" ", ""), ignoreCase: true, out var newStatus))
             throw new ArgumentException($"Invalid status '{dto.NewStatus}'.");
 
         var ticket = await _db.Tickets.FindAsync(ticketId);

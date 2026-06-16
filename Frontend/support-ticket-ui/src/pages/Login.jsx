@@ -7,27 +7,14 @@ export default function Login() {
 
   const [selectedRole, setSelectedRole] = useState(null);
 
-  const [isRegistering, setIsRegistering] = useState(false);
-
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  const [regName, setRegName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regError, setRegError] = useState('');
-  const [regSuccess, setRegSuccess] = useState('');
-
   const resetFormStates = () => {
     setLoginEmail('');
     setLoginPassword('');
-    setRegName('');
-    setRegEmail('');
-    setRegPassword('');
     setLoginError('');
-    setRegError('');
-    setRegSuccess('');
   };
 
   useEffect(() => {
@@ -72,41 +59,6 @@ export default function Login() {
     }
   };
 
-  // submit registration request
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setRegError('');
-    setRegSuccess('');
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: regName,
-          email: regEmail,
-          password: regPassword,
-          role: selectedRole // registers under the currently selected portal role
-        })
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || 'Registration failed');
-      }
-
-      setRegSuccess('Registration successful! Please login.');
-      setRegName('');
-      setRegEmail('');
-      setRegPassword('');
-      setTimeout(() => {
-        setIsRegistering(false);
-      }, 1500);
-    } catch (err) {
-      setRegError(err.message);
-    }
-  };
-
   if (selectedRole === null) {
     return (
       <div className="auth-page">
@@ -135,65 +87,8 @@ export default function Login() {
               Supervisor Portal
             </button>
           </div>
-        </div>
-      </div>
-    );
-  }
 
-  if (isRegistering) {
-    return (
-      <div className="auth-page">
-        <div className="auth-card">
-          <div style={{ marginBottom: '15px' }}>
-            <a onClick={() => { resetFormStates(); setSelectedRole(null); setIsRegistering(false); }}>
-              ← Back to Portal Selection
-            </a>
-          </div>
-          <h2 style={{ fontSize: '1.3em', marginBottom: '4px', color: '#0066cc', textAlign: 'center' }}>
-            Welcome to Ticket Support System
-          </h2>
-          <h3 style={{ fontSize: '1.1em', textAlign: 'center', marginBottom: '20px', fontWeight: '500' }}>
-            Register ({selectedRole})
-          </h3>
-          {regError && <p className="error-msg">{regError}</p>}
-          {regSuccess && <p className="success-msg">{regSuccess}</p>}
-          <form onSubmit={handleRegister} style={{ border: 'none', padding: 0, boxShadow: 'none', margin: 0 }}>
-            <div className="form-group">
-              <label>Full Name</label>
-              <input
-                type="text"
-                value={regName}
-                onChange={(e) => setRegName(e.target.value)}
-                required
-                autoComplete="new-name"
-              />
-            </div>
-            <div className="form-group">
-              <label>Email Address</label>
-              <input
-                type="email"
-                value={regEmail}
-                onChange={(e) => setRegEmail(e.target.value)}
-                required
-                autoComplete="new-email"
-              />
-            </div>
-            <div className="form-group">
-              <label>Password</label>
-              <input
-                type="password"
-                value={regPassword}
-                onChange={(e) => setRegPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-              />
-            </div>
-            <button type="submit" style={{ width: '100%' }}>Register Account</button>
-          </form>
-          <div style={{ marginTop: '15px', textAlign: 'center' }}>
-            <span>Already have an account? </span>
-            <a onClick={() => { resetFormStates(); setIsRegistering(false); }}>Move to Login</a>
-          </div>
+
         </div>
       </div>
     );
@@ -210,9 +105,12 @@ export default function Login() {
         <h2 style={{ fontSize: '1.3em', marginBottom: '4px', color: '#0066cc', textAlign: 'center' }}>
           Welcome to Ticket Support System
         </h2>
-        <h3 style={{ fontSize: '1.1em', textAlign: 'center', marginBottom: '20px', fontWeight: '500' }}>
+        <h3 style={{ fontSize: '1.1em', textAlign: 'center', marginBottom: '10px', fontWeight: '500' }}>
           Login ({selectedRole})
         </h3>
+        
+
+
         {loginError && <p className="error-msg">{loginError}</p>}
         <form onSubmit={handleLogin} style={{ border: 'none', padding: 0, boxShadow: 'none', margin: 0 }}>
           <div className="form-group">
@@ -249,10 +147,6 @@ export default function Login() {
             Sign In
           </button>
         </form>
-        <div style={{ marginTop: '15px', textAlign: 'center' }}>
-          <span>Don't have an account? </span>
-          <a onClick={() => { resetFormStates(); setIsRegistering(true); }}>Move to Signup</a>
-        </div>
       </div>
     </div>
   );
