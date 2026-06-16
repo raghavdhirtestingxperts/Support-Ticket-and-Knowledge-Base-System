@@ -27,17 +27,4 @@ public class AuthController : ControllerBase
 
         return Ok(result);
     }
-
-    [HttpPost("register")]
-    [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
-    {
-        var result = await _authService.RegisterAsync(request);
-
-        if (result is null)
-            return BadRequest(new { message = "Email already in use or invalid role provided." });
-
-        return CreatedAtAction(nameof(Login), result);
-    }
 }

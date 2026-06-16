@@ -12,7 +12,6 @@ namespace SupportTicketAPI.Services;
 public interface IAuthService
 {
     Task<LoginResponseDto?> LoginAsync(LoginRequestDto request);
-    Task<LoginResponseDto?> RegisterAsync(RegisterRequestDto request);
 }
 
 public class AuthService : IAuthService
@@ -33,36 +32,6 @@ public class AuthService : IAuthService
 
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return null;
-
-        return new LoginResponseDto(
-            Token: GenerateToken(user),
-            Email: user.Email,
-            Name: user.Name,
-            Role: user.Role.ToString(),
-            UserId: user.Id
-        );
-    }
-
-    public async Task<LoginResponseDto?> RegisterAsync(RegisterRequestDto request)
-    {
-        if (await _db.Users.AnyAsync(u => u.Email == request.Email))
-            return null; // Email already exists
-
-        if (!Enum.TryParse<UserRole>(request.Role, ignoreCase: true, out var role))
-            return null; // Invalid role
-
-        var user = new User
-        {
-            Name = request.Name,
-            Email = request.Email,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-            Role = role,
-            TenantId = "default",
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _db.Users.Add(user);
-        await _db.SaveChangesAsync();
 
         return new LoginResponseDto(
             Token: GenerateToken(user),

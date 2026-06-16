@@ -11,9 +11,3 @@ public record LoginResponseDto(
     int UserId
 );
 
-public record RegisterRequestDto(
-    string Name,
-    string Email,
-    string Password,
-    string Role
-);
