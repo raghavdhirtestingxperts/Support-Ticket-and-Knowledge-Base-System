@@ -1,63 +1,70 @@
-using Microsoft.EntityFrameworkCore;
-using SupportTicketAPI.Data;
-using SupportTicketAPI.DTOs;
+using SupportTicketAPI.Constants;
+using SupportTicketAPI.Interfaces;
 using SupportTicketAPI.Models;
 
 namespace SupportTicketAPI.Services;
 
-public interface IKbService
-{
-    Task<IEnumerable<ArticleResponseDto>> GetArticlesAsync(string? search);
-    Task<ArticleResponseDto> CreateArticleAsync(CreateArticleDto dto, int agentUserId);
-}
-
+// knowledge base logic implementation
 public class KbService : IKbService
 {
-    private readonly AppDbContext _db;
+    private readonly IKbRepository _kb;
 
-    public KbService(AppDbContext db) => _db = db;
+    public KbService(IKbRepository kb) => _kb = kb;
 
-    public async Task<IEnumerable<ArticleResponseDto>> GetArticlesAsync(string? search)
-    {
-        var query = _db.KnowledgeBaseArticles
-            .Include(a => a.CreatedBy)
-            .AsQueryable();
+    public async Task<IEnumerable<KnowledgeBaseArticle>> GetArticlesAsync(string? search)
+        => await _kb.GetAllAsync(search);
 
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var term = search.Trim().ToLower();
-            query = query.Where(a =>
-                a.Title.ToLower().Contains(term) ||
-                a.Body.ToLower().Contains(term)  ||
-                a.Tags.ToLower().Contains(term));
-        }
-
-        var articles = await query.OrderByDescending(a => a.CreatedAt).ToListAsync();
-        return articles.Select(MapToDto);
-    }
-
-    public async Task<ArticleResponseDto> CreateArticleAsync(CreateArticleDto dto, int agentUserId)
+    public async Task<KnowledgeBaseArticle> CreateArticleAsync(
+        string title, string body, string tags, int agentUserId)
     {
         var article = new KnowledgeBaseArticle
         {
-            Title           = dto.Title,
-            Body            = dto.Body,
-            Tags            = dto.Tags,
+            Title           = title,
+            Body            = body,
+            Tags            = tags,
             CreatedAt       = DateTime.UtcNow,
             UpdatedAt       = null,
             CreatedByUserId = agentUserId
         };
 
-        _db.KnowledgeBaseArticles.Add(article);
-        await _db.SaveChangesAsync();
+        _kb.Add(article);
+        await _kb.SaveAsync();
 
-        await _db.Entry(article).Reference(a => a.CreatedBy).LoadAsync();
-        return MapToDto(article);
+        // load author relation for output dto
+        await _kb.LoadCreatedByAsync(article);
+        return article;
     }
 
-    private static ArticleResponseDto MapToDto(KnowledgeBaseArticle a) => new(
-        a.Id, a.Title, a.Body, a.Tags,
-        a.CreatedAt, a.UpdatedAt,
-        a.CreatedByUserId, a.CreatedBy.Name
-    );
+    public async Task<KnowledgeBaseArticle?> UpdateArticleAsync(
+        int id, string title, string body, string tags, int requestingUserId, string role)
+    {
+        var article = await _kb.GetByIdAsync(id);
+        if (article is null) return null;
+
+        // only author or supervisor can edit
+        if (role != RoleNames.Supervisor && article.CreatedByUserId != requestingUserId)
+            throw new UnauthorizedAccessException("You can only edit articles you created.");
+
+        article.Title     = title;
+        article.Body      = body;
+        article.Tags      = tags;
+        article.UpdatedAt = DateTime.UtcNow;
+
+        await _kb.SaveAsync();
+        return article;
+    }
+
+    public async Task<bool> DeleteArticleAsync(int id, int requestingUserId, string role)
+    {
+        var article = await _kb.GetByIdAsync(id);
+        if (article is null) return false;
+
+        // only author or supervisor can delete
+        if (role != RoleNames.Supervisor && article.CreatedByUserId != requestingUserId)
+            throw new UnauthorizedAccessException("You can only delete articles you created.");
+
+        _kb.Delete(article);
+        await _kb.SaveAsync();
+        return true;
+    }
 }

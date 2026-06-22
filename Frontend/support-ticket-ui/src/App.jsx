@@ -1,8 +1,10 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import CustomerDashboard from './pages/CustomerDashboard';
 import AgentDashboard from './pages/AgentDashboard';
 import SupervisorDashboard from './pages/SupervisorDashboard';
@@ -29,8 +31,9 @@ export default function App() {
     <BrowserRouter>
       <Navbar />
       <Routes>
-        {/* auth page */}
+        {/* auth pages */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
         {/* customer dashboard */}
         <Route
@@ -86,6 +89,7 @@ export default function App() {
         <Route path="/" element={<HomeRedirect />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <Footer />
     </BrowserRouter>
   );
 }

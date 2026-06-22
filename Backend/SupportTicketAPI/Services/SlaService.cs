@@ -1,16 +1,9 @@
+using SupportTicketAPI.Interfaces;
 using SupportTicketAPI.Models;
 
 namespace SupportTicketAPI.Services;
 
-public interface ISlaService
-{
-    DateTime CalculateDeadline(TicketPriority priority, DateTime createdAt);
-
-    bool IsBreached(DateTime slaDeadline);
-
-    int HoursForPriority(TicketPriority priority);
-}
-
+// computes sla deadlines and breaches
 public class SlaService : ISlaService
 {
     private static readonly Dictionary<TicketPriority, int> SlaHours = new()

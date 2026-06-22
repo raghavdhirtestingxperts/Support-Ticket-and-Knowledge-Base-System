@@ -1,260 +1,206 @@
-using Microsoft.EntityFrameworkCore;
-using SupportTicketAPI.Data;
-using SupportTicketAPI.DTOs;
+using SupportTicketAPI.Constants;
+using SupportTicketAPI.Interfaces;
 using SupportTicketAPI.Models;
 
 namespace SupportTicketAPI.Services;
 
-public interface ITicketService
-{
-    Task<TicketResponseDto> CreateTicketAsync(CreateTicketDto dto, int createdByUserId);
-    Task<IEnumerable<TicketListItemDto>> GetMyTicketsAsync(int userId);
-    Task<IEnumerable<TicketListItemDto>> GetAllTicketsAsync(string? status, string? priority, int? assignedToUserId);
-    Task<TicketResponseDto?> GetTicketByIdAsync(int ticketId, int requestingUserId, string role);
-    Task<TicketResponseDto?> AssignTicketAsync(int ticketId, AssignTicketDto dto, int requestingUserId);
-    Task<TicketResponseDto?> UpdateStatusAsync(int ticketId, UpdateStatusDto dto, int requestingUserId);
-    Task<CommentResponseDto?> AddCommentAsync(int ticketId, AddCommentDto dto, int userId, string role);
-    Task<IEnumerable<BreachedTicketDto>> GetBreachedTicketsAsync();
-}
-
+// implements ticket business logic
 public class TicketService : ITicketService
 {
-    private readonly AppDbContext _db;
-    private readonly ISlaService  _sla;
+    private readonly ITicketRepository _tickets;
+    private readonly IUserRepository   _users;
+    private readonly ISlaService       _sla;
 
-    public TicketService(AppDbContext db, ISlaService sla)
+    public TicketService(ITicketRepository tickets, IUserRepository users, ISlaService sla)
     {
-        _db  = db;
-        _sla = sla;
+        _tickets = tickets;
+        _users   = users;
+        _sla     = sla;
     }
 
+    // allowed status transitions
     private static readonly Dictionary<TicketStatus, TicketStatus[]> AllowedTransitions = new()
     {
-        { TicketStatus.Open,[TicketStatus.InProgress] },
-        { TicketStatus.InProgress,[TicketStatus.PendingCustomer, TicketStatus.Resolved] },
-        { TicketStatus.PendingCustomer,[TicketStatus.InProgress] },
-        { TicketStatus.Resolved,[TicketStatus.Closed] },
-        { TicketStatus.Closed,[] }
+        { TicketStatus.Open,            [TicketStatus.InProgress] },
+        { TicketStatus.InProgress,      [TicketStatus.PendingCustomer, TicketStatus.Resolved] },
+        { TicketStatus.PendingCustomer, [TicketStatus.InProgress] },
+        { TicketStatus.Resolved,        [TicketStatus.Closed] },
+        { TicketStatus.Closed,          [] }
     };
 
-    public async Task<TicketResponseDto> CreateTicketAsync(CreateTicketDto dto, int createdByUserId)
+
+    public async Task<Ticket> CreateTicketAsync(
+        string title, string description, string priority, int createdByUserId)
     {
-        if (!Enum.TryParse<TicketPriority>(dto.Priority, ignoreCase: true, out var priority))
-            throw new ArgumentException($"Invalid priority '{dto.Priority}'.");
+        if (!Enum.TryParse<TicketPriority>(priority, ignoreCase: true, out var parsedPriority))
+            throw new ArgumentException($"Invalid priority '{priority}'.");
 
         var now      = DateTime.UtcNow;
-        var deadline = _sla.CalculateDeadline(priority, now);
+        var deadline = _sla.CalculateDeadline(parsedPriority, now);
 
         var ticket = new Ticket
         {
-            Title             = dto.Title,
-            Description       = dto.Description,
-            Status            = TicketStatus.Open,
-            Priority          = priority,
-            CreatedAt         = now,
-            SlaDeadline       = deadline,
-            IsSlaBreached     = false,
-            CreatedByUserId   = createdByUserId,
-            AssignedToUserId  = null
+            Title            = title,
+            Description      = description,
+            Status           = TicketStatus.Open,
+            Priority         = parsedPriority,
+            CreatedAt        = now,
+            SlaDeadline      = deadline,
+            IsSlaBreached    = false,
+            CreatedByUserId  = createdByUserId,
+            AssignedToUserId = null
         };
 
-        _db.Tickets.Add(ticket);
-        await _db.SaveChangesAsync();
+        _tickets.Add(ticket);
+        await _tickets.SaveAsync();
 
-        return await BuildResponseAsync(ticket.Id);
+        // reload ticket with details
+        return (await _tickets.GetByIdWithDetailsAsync(ticket.Id))!;
     }
 
-    public async Task<IEnumerable<TicketListItemDto>> GetMyTicketsAsync(int userId)
+    public async Task<IEnumerable<Ticket>> GetMyTicketsAsync(int userId)
     {
-        var tickets = await _db.Tickets
-            .Include(t => t.CreatedBy)
-            .Include(t => t.AssignedTo)
-            .Where(t => t.CreatedByUserId == userId)
-            .OrderByDescending(t => t.CreatedAt)
-            .ToListAsync();
-
+        var tickets = await _tickets.GetByUserAsync(userId);
         RefreshBreachFlags(tickets);
-        await _db.SaveChangesAsync();
-
-        return tickets.Select(MapToListItem);
+        await _tickets.SaveAsync();
+        return tickets;
     }
 
-    public async Task<IEnumerable<TicketListItemDto>> GetAllTicketsAsync(
+    public async Task<IEnumerable<Ticket>> GetAllTicketsAsync(
         string? status, string? priority, int? assignedToUserId)
     {
-        var query = _db.Tickets
-            .Include(t => t.CreatedBy)
-            .Include(t => t.AssignedTo)
-            .AsQueryable();
+        // parse filters
+        TicketStatus?   statusEnum   = null;
+        TicketPriority? priorityEnum = null;
 
         if (!string.IsNullOrWhiteSpace(status) &&
             Enum.TryParse<TicketStatus>(status.Replace(" ", ""), ignoreCase: true, out var s))
-            query = query.Where(t => t.Status == s);
+            statusEnum = s;
 
         if (!string.IsNullOrWhiteSpace(priority) &&
             Enum.TryParse<TicketPriority>(priority, ignoreCase: true, out var p))
-            query = query.Where(t => t.Priority == p);
+            priorityEnum = p;
 
-        if (assignedToUserId.HasValue)
-            query = query.Where(t => t.AssignedToUserId == assignedToUserId.Value);
-
-        var tickets = await query.OrderByDescending(t => t.CreatedAt).ToListAsync();
-
+        var tickets = await _tickets.GetFilteredAsync(statusEnum, priorityEnum, assignedToUserId);
         RefreshBreachFlags(tickets);
-        await _db.SaveChangesAsync();
-
-        return tickets.Select(MapToListItem);
+        await _tickets.SaveAsync();
+        return tickets;
     }
 
-    public async Task<TicketResponseDto?> GetTicketByIdAsync(int ticketId, int requestingUserId, string role)
+    public async Task<Ticket?> GetTicketByIdAsync(int ticketId, int requestingUserId, string role)
     {
-        var ticket = await _db.Tickets.FindAsync(ticketId);
+        var ticket = await _tickets.GetByIdAsync(ticketId);
         if (ticket is null) return null;
 
-        if (role == "Customer" && ticket.CreatedByUserId != requestingUserId)
+        // customer can only view own tickets
+        if (role == RoleNames.Customer && ticket.CreatedByUserId != requestingUserId)
             return null;
 
-        return await BuildResponseAsync(ticketId);
+        if (!ticket.IsSlaBreached && _sla.IsBreached(ticket.SlaDeadline))
+        {
+            ticket.IsSlaBreached = true;
+            await _tickets.SaveAsync();
+        }
+
+        return await _tickets.GetByIdWithDetailsAsync(ticketId);
     }
 
-    public async Task<TicketResponseDto?> AssignTicketAsync(int ticketId, AssignTicketDto dto, int requestingUserId)
+    public async Task<Ticket?> AssignTicketAsync(int ticketId, int agentUserId, int requestingUserId)
     {
-        var ticket = await _db.Tickets.FindAsync(ticketId);
+        var ticket = await _tickets.GetByIdAsync(ticketId);
         if (ticket is null) return null;
+
         if (ticket.Status == TicketStatus.Closed)
             throw new InvalidOperationException("Cannot assign a closed ticket.");
 
-        var agent = await _db.Users.FindAsync(dto.AgentUserId);
+        var agent = await _users.GetByIdAsync(agentUserId);
         if (agent is null || agent.Role != UserRole.Agent)
             throw new ArgumentException("Target user is not a valid agent.");
 
-        ticket.AssignedToUserId = dto.AgentUserId;
-        await _db.SaveChangesAsync();
+        ticket.AssignedToUserId = agentUserId;
+        if (!ticket.IsSlaBreached && _sla.IsBreached(ticket.SlaDeadline))
+        {
+            ticket.IsSlaBreached = true;
+        }
+        await _tickets.SaveAsync();
 
-        return await BuildResponseAsync(ticketId);
+        return await _tickets.GetByIdWithDetailsAsync(ticketId);
     }
 
-    public async Task<TicketResponseDto?> UpdateStatusAsync(int ticketId, UpdateStatusDto dto, int requestingUserId)
+    public async Task<Ticket?> UpdateStatusAsync(
+        int ticketId, string newStatus, string? note, int requestingUserId)
     {
-        if (!Enum.TryParse<TicketStatus>(dto.NewStatus.Replace(" ", ""), ignoreCase: true, out var newStatus))
-            throw new ArgumentException($"Invalid status '{dto.NewStatus}'.");
+        if (!Enum.TryParse<TicketStatus>(newStatus.Replace(" ", ""), ignoreCase: true, out var parsedStatus))
+            throw new ArgumentException($"Invalid status '{newStatus}'.");
 
-        var ticket = await _db.Tickets.FindAsync(ticketId);
+        var ticket = await _tickets.GetByIdAsync(ticketId);
         if (ticket is null) return null;
 
         if (ticket.Status == TicketStatus.Closed)
             throw new InvalidOperationException("Closed ticket cannot be edited.");
 
-        if (!AllowedTransitions[ticket.Status].Contains(newStatus))
+        if (!AllowedTransitions[ticket.Status].Contains(parsedStatus))
             throw new InvalidOperationException(
-                $"Transition from '{ticket.Status}' to '{newStatus}' is not allowed.");
+                $"Transition from '{ticket.Status}' to '{parsedStatus}' is not allowed.");
 
         var oldStatus = ticket.Status;
-        ticket.Status = newStatus;
+        ticket.Status = parsedStatus;
 
-        var history = new TicketHistory
+        _tickets.AddHistory(new TicketHistory
         {
-            TicketId         = ticketId,
-            OldStatus        = oldStatus,
-            NewStatus        = newStatus,
-            Note             = dto.Note,
-            ChangedAt        = DateTime.UtcNow,
-            ChangedByUserId  = requestingUserId
-        };
-        _db.TicketHistories.Add(history);
-        await _db.SaveChangesAsync();
+            TicketId        = ticketId,
+            OldStatus       = oldStatus,
+            NewStatus       = parsedStatus,
+            Note            = note,
+            ChangedAt       = DateTime.UtcNow,
+            ChangedByUserId = requestingUserId
+        });
 
-        return await BuildResponseAsync(ticketId);
+        if (!ticket.IsSlaBreached && _sla.IsBreached(ticket.SlaDeadline))
+        {
+            ticket.IsSlaBreached = true;
+        }
+
+        await _tickets.SaveAsync();
+        return await _tickets.GetByIdWithDetailsAsync(ticketId);
     }
 
-    public async Task<CommentResponseDto?> AddCommentAsync(int ticketId, AddCommentDto dto, int userId, string role)
+    public async Task<TicketComment?> AddCommentAsync(
+        int ticketId, string content, int userId, string role)
     {
-        var ticket = await _db.Tickets.FindAsync(ticketId);
+        var ticket = await _tickets.GetByIdAsync(ticketId);
         if (ticket is null) return null;
 
-        if (role == "Customer" && ticket.CreatedByUserId != userId)
+        if (role == RoleNames.Customer && ticket.CreatedByUserId != userId)
             throw new UnauthorizedAccessException("Customers can only comment on their own tickets.");
 
         var comment = new TicketComment
         {
             TicketId  = ticketId,
             UserId    = userId,
-            Content   = dto.Content,
+            Content   = content,
             CreatedAt = DateTime.UtcNow
         };
 
-        _db.TicketComments.Add(comment);
-        await _db.SaveChangesAsync();
+        _tickets.AddComment(comment);
+        await _tickets.SaveAsync();
 
-        var user = await _db.Users.FindAsync(userId);
-        return new CommentResponseDto(comment.Id, comment.Content, comment.CreatedAt, userId, user!.Name);
+        // load user reference
+        comment.User = (await _users.GetByIdAsync(userId))!;
+        return comment;
     }
 
-    public async Task<IEnumerable<BreachedTicketDto>> GetBreachedTicketsAsync()
+    public async Task<IEnumerable<Ticket>> GetBreachedTicketsAsync()
     {
-        var now = DateTime.UtcNow;
-
-        var tickets = await _db.Tickets
-            .Include(t => t.AssignedTo)
-            .Where(t => t.SlaDeadline < now && t.Status != TicketStatus.Closed)
-            .OrderBy(t => t.SlaDeadline)
-            .ToListAsync();
+        var tickets = await _tickets.GetBreachedAsync();
 
         foreach (var t in tickets.Where(t => !t.IsSlaBreached))
             t.IsSlaBreached = true;
-        await _db.SaveChangesAsync();
 
-        return tickets.Select(t => new BreachedTicketDto(
-            t.Id,
-            t.Title,
-            t.Priority.ToString(),
-            t.Status.ToString(),
-            t.SlaDeadline,
-            Math.Round((now - t.SlaDeadline).TotalHours, 1),
-            t.AssignedTo?.Name
-        ));
+        await _tickets.SaveAsync();
+        return tickets;
     }
 
-
-    private async Task<TicketResponseDto> BuildResponseAsync(int ticketId)
-    {
-        var t = await _db.Tickets
-            .Include(t => t.CreatedBy)
-            .Include(t => t.AssignedTo)
-            .Include(t => t.Comments).ThenInclude(c => c.User)
-            .Include(t => t.History).ThenInclude(h => h.ChangedBy)
-            .FirstAsync(t => t.Id == ticketId);
-
-        return new TicketResponseDto(
-            t.Id,
-            t.Title,
-            t.Description,
-            t.Status.ToString(),
-            t.Priority.ToString(),
-            t.CreatedAt,
-            t.SlaDeadline,
-            _sla.IsBreached(t.SlaDeadline),
-            t.CreatedByUserId,
-            t.CreatedBy.Name,
-            t.AssignedToUserId,
-            t.AssignedTo?.Name,
-            t.Comments.OrderBy(c => c.CreatedAt).Select(c => new CommentResponseDto(
-                c.Id, c.Content, c.CreatedAt, c.UserId, c.User.Name)),
-            t.History.OrderBy(h => h.ChangedAt).Select(h => new TicketHistoryResponseDto(
-                h.Id,
-                h.OldStatus?.ToString(),
-                h.NewStatus.ToString(),
-                h.Note,
-                h.ChangedAt,
-                h.ChangedBy.Name))
-        );
-    }
-
-    private static TicketListItemDto MapToListItem(Ticket t) => new(
-        t.Id, t.Title, t.Status.ToString(), t.Priority.ToString(),
-        t.CreatedAt, t.SlaDeadline, t.IsSlaBreached,
-        t.CreatedBy.Name, t.AssignedTo?.Name
-    );
 
     private void RefreshBreachFlags(List<Ticket> tickets)
     {

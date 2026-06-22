@@ -1,133 +1,180 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../config';
+import { IconRefresh, IconUsers, IconZap, IconCheck, IconUser } from '../components/Icons';
+
+function fmt(dt) {
+  return new Date(dt).toLocaleString(undefined, {
+    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
 
 export default function SupervisorDashboard() {
-  const [workloads, setWorkloads] = useState([]);
+  const [workloads, setWorkloads]             = useState([]);
   const [breachedTickets, setBreachedTickets] = useState([]);
-  const [workloadError, setWorkloadError] = useState('');
-  const [breachedError, setBreachedError] = useState('');
+  const [workloadError, setWorkloadError]     = useState('');
+  const [breachedError, setBreachedError]     = useState('');
+  const [loading, setLoading]                 = useState(true);
 
-  // fetch metrics data
   const fetchData = async () => {
     const token = localStorage.getItem('token');
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/dashboard/agent-workload`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to load agent workloads');
+      setWorkloads(await res.json());
+    } catch (err) { setWorkloadError(err.message); }
 
     try {
-      const workloadRes = await fetch(`${API_BASE_URL}/api/dashboard/agent-workload`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`${API_BASE_URL}/api/tickets/breached`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      if (!workloadRes.ok) {
-        throw new Error('Failed to load agent workloads');
-      }
-      const workloadData = await workloadRes.json();
-      setWorkloads(workloadData);
-    } catch (err) {
-      setWorkloadError(err.message);
-    }
-
-    try {
-      const breachedRes = await fetch(`${API_BASE_URL}/api/tickets/breached`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (!breachedRes.ok) {
-        throw new Error('Failed to load breached tickets');
-      }
-      const breachedData = await breachedRes.json();
-      setBreachedTickets(breachedData);
-    } catch (err) {
-      setBreachedError(err.message);
-    }
+      if (!res.ok) throw new Error('Failed to load breached tickets');
+      setBreachedTickets(await res.json());
+    } catch (err) { setBreachedError(err.message); }
+    setLoading(false);
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
+
+  const totalOpen     = workloads.reduce((s, w) => s + w.openTicketCount, 0);
+  const totalResolved = workloads.reduce((s, w) => s + w.resolvedTicketCount, 0);
+  const totalBreached = breachedTickets.length;
 
   return (
-    <div>
-      <h2>Supervisor Dashboard</h2>
+    <div className="page-wrapper">
+      <div className="section-header section-header-mb">
+        <h2>Supervisor Dashboard</h2>
+        <button onClick={fetchData} className="btn-ghost btn-sm">
+          <IconRefresh size={14} /> Refresh
+        </button>
+      </div>
 
-      <div className="dashboard-grid">
-        {/* agent workload section */}
-        <div className="dashboard-col" style={{ flex: 1 }}>
-          <h3>Agent Workloads</h3>
-          {workloadError && <p className="error-msg">{workloadError}</p>}
-          {workloads.length === 0 ? (
-            <p>No agent data available.</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Agent Name</th>
-                  <th>Open Tickets</th>
-                  <th>Resolved Tickets</th>
-                  <th>Breached Tickets</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workloads.map((w) => (
-                  <tr key={w.agentUserId}>
-                    <td>{w.agentName}</td>
-                    <td>{w.openTicketCount}</td>
-                    <td>{w.resolvedTicketCount}</td>
-                    <td>{w.breachedTicketCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      {/* kpi stat cards */}
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="stat-label">Active Agents</div>
+          <div className="stat-value is-info">{workloads.length}</div>
         </div>
-
-        {/* breached tickets section */}
-        <div className="dashboard-col" style={{ flex: 1 }}>
-          <h3>SLA-Breached Tickets</h3>
-          {breachedError && <p className="error-msg">{breachedError}</p>}
-          {breachedTickets.length === 0 ? (
-            <p>No SLA-breached tickets currently.</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Title</th>
-                  <th>Priority</th>
-                  <th>Status</th>
-                  <th>Hours Overdue</th>
-                  <th>Assigned To</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {breachedTickets.map((t) => (
-                  <tr key={t.id}>
-                    <td>{t.id}</td>
-                    <td>{t.title}</td>
-                    <td>
-                      <span className={`badge badge-${t.priority.toLowerCase()}`}>
-                        {t.priority}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge badge-${t.status.replace(/\s+/g, '').toLowerCase()}`}>
-                        {t.status}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="badge badge-breached" style={{ fontWeight: 'bold' }}>
-                        {t.hoursOverdue} hrs overdue
-                      </span>
-                    </td>
-                    <td>{t.assignedToName || 'Unassigned'}</td>
-                    <td>
-                      <Link to={`/ticket/${t.id}`}>View Details</Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        <div className="stat-card">
+          <div className="stat-label">Open Tickets</div>
+          <div className={`stat-value ${totalOpen > 0 ? 'is-warning' : ''}`}>{totalOpen}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">Resolved</div>
+          <div className="stat-value is-success">{totalResolved}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">SLA Breached</div>
+          <div className={`stat-value ${totalBreached > 0 ? 'is-danger' : 'is-success'}`}>{totalBreached}</div>
         </div>
       </div>
+
+      {loading ? (
+        <div className="loading"><div className="spinner" /> Loading data…</div>
+      ) : (
+        <div className="dashboard-grid cols-eq" style={{ alignItems: 'start' }}>
+
+          {/* agent workloads */}
+          <div>
+            <div className="section-header section-header-sm">
+              <h3>Agent Workloads</h3>
+            </div>
+            {workloadError && <p className="error-msg">{workloadError}</p>}
+            {workloads.length === 0 ? (
+              <div className="card">
+                <div className="empty-state">
+                  <div className="empty-state-icon"><IconUsers size={36} /></div>
+                  <p>No agent data available.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="card-stack">
+                {workloads.map(w => (
+                  <div key={w.agentUserId} className="card card-compact">
+                    {/* agent identity */}
+                    <div className="agent-identity">
+                      <div className="agent-avatar">
+                        {w.agentName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="agent-name">{w.agentName}</div>
+                        <div className="agent-meta">Agent · ID {w.agentUserId}</div>
+                      </div>
+                      {w.breachedTicketCount > 0 && (
+                        <span className="badge badge-breached agent-breach-badge">
+                          <IconZap size={10} /> {w.breachedTicketCount} breached
+                        </span>
+                      )}
+                    </div>
+
+                    {/* stats */}
+                    <div className="agent-stats">
+                      {[
+                        { label: 'Open',     value: w.openTicketCount,     color: w.openTicketCount > 5 ? 'var(--amber)' : 'var(--text-primary)' },
+                        { label: 'Resolved', value: w.resolvedTicketCount, color: 'var(--green)' },
+                        { label: 'Breached', value: w.breachedTicketCount, color: w.breachedTicketCount > 0 ? 'var(--red)' : 'var(--text-muted)' },
+                      ].map(s => (
+                        <div key={s.label} className="agent-stat-cell">
+                          <div className="agent-stat-value" style={{ color: s.color }}>{s.value}</div>
+                          <div className="agent-stat-label">{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* breached tickets */}
+          <div>
+            <div className="section-header section-header-sm">
+              <h3 className={totalBreached > 0 ? 'text-danger' : ''}>
+                {totalBreached > 0 ? <><IconZap size={16} /> SLA Breached ({totalBreached})</> : <><IconCheck size={16} /> SLA Status</>}
+              </h3>
+            </div>
+            {breachedError && <p className="error-msg">{breachedError}</p>}
+            {breachedTickets.length === 0 ? (
+              <div className="card">
+                <div className="empty-state">
+                  <div className="empty-state-icon"><IconCheck size={36} /></div>
+                  <p>All tickets are within SLA — great work!</p>
+                </div>
+              </div>
+            ) : (
+              <div className="card-stack">
+                {breachedTickets.map(t => (
+                  <div key={t.id} className="card card-compact card-breached">
+                    <div className="breached-header">
+                      <div>
+                        <div className="breached-id">#{t.id}</div>
+                        <div className="breached-title">{t.title}</div>
+                      </div>
+                      <span className="badge badge-breached">+{t.hoursOverdue}h overdue</span>
+                    </div>
+
+                    <div className="badge-row">
+                      <span className={`badge badge-${t.priority.toLowerCase()}`}>{t.priority}</span>
+                      <span className={`badge badge-${t.status.replace(/\s+/g,'').toLowerCase()}`}>{t.status}</span>
+                      {t.assignedToName
+                        ? <span className="text-secondary text-sm"><IconUser size={12} /> {t.assignedToName}</span>
+                        : <span className="text-muted text-sm text-italic">Unassigned</span>}
+                    </div>
+
+                    <Link to={`/ticket/${t.id}`}>
+                      <button className="btn-ghost btn-sm btn-full">View &amp; Reassign</button>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
     </div>
   );
 }

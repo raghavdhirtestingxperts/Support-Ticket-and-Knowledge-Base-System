@@ -1,20 +1,35 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using SupportTicketAPI.Data;
+using SupportTicketAPI.Interfaces;
+using SupportTicketAPI.Repositories;
 using SupportTicketAPI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure database
+// ── ensure environment variables override appsettings ──
+builder.Configuration.AddEnvironmentVariables();
+
+// ── database setup ──
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseMySQL(builder.Configuration.GetConnectionString("DefaultConnection")!));
 
-// Configure JWT authentication
+// ── jwt auth setup ──
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"]!;
+
+// crash early if secrets were not replaced
+if (string.IsNullOrWhiteSpace(secretKey) || secretKey.Contains("__SET_VIA_ENV"))
+{
+    throw new InvalidOperationException(
+        "JWT SecretKey is not configured. Set it via environment variable " +
+        "'JwtSettings__SecretKey' or in appsettings.Development.json.");
+}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -33,17 +48,50 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// Register application services
-builder.Services.AddScoped<IAuthService,     AuthService>();
-builder.Services.AddScoped<ISlaService,      SlaService>();
-builder.Services.AddScoped<ITicketService,   TicketService>();
-builder.Services.AddScoped<IKbService,       KbService>();
+// ── rate limiting ──
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // strict policy for auth endpoints (5 req / 60s per IP)
+    options.AddPolicy("auth", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+        factory: partition => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window      = TimeSpan.FromSeconds(60),
+            QueueLimit  = 0
+        }));
+
+    // general policy for API endpoints (60 req / 60s per IP)
+    options.AddPolicy("api", httpContext => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+        factory: partition => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 60,
+            Window      = TimeSpan.FromSeconds(60),
+            QueueLimit  = 2
+        }));
+});
+
+// ── repositories ──
+builder.Services.AddScoped<IUserRepository,      UserRepository>();
+builder.Services.AddScoped<ITicketRepository,    TicketRepository>();
+builder.Services.AddScoped<IKbRepository,        KbRepository>();
+builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
+
+// ── services ──
+builder.Services.AddScoped<IAuthService,      AuthService>();
+builder.Services.AddScoped<IUserService,      UserService>();
+builder.Services.AddScoped<ISlaService,       SlaService>();
+builder.Services.AddScoped<ITicketService,    TicketService>();
+builder.Services.AddScoped<IKbService,        KbService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 
-// Add controllers
+// ── controllers ──
 builder.Services.AddControllers();
 
-// Configure Swagger/OpenAPI
+// ── swagger setup ──
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -70,7 +118,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Configure CORS policy
+// ── cors setup ──
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -81,7 +129,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Apply pending database migrations on startup
+// ── run migrations ──
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -94,12 +142,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "Support Ticket API v1");
-        c.RoutePrefix = string.Empty;//swagger
+        c.RoutePrefix = string.Empty;
     });
 }
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

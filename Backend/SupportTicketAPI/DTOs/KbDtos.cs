@@ -1,9 +1,27 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace SupportTicketAPI.DTOs;
 
 
 public record CreateArticleDto(
+    [Required, MaxLength(200)]
     string Title,
+
+    [Required, MaxLength(10000)]
     string Body,
+
+    [MaxLength(500)]
+    string Tags
+);
+
+public record UpdateArticleDto(
+    [Required, MaxLength(200)]
+    string Title,
+
+    [Required, MaxLength(10000)]
+    string Body,
+
+    [MaxLength(500)]
     string Tags
 );
 

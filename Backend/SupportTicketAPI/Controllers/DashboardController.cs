@@ -1,13 +1,16 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using SupportTicketAPI.Constants;
 using SupportTicketAPI.DTOs;
-using SupportTicketAPI.Services;
+using SupportTicketAPI.Interfaces;
 
 namespace SupportTicketAPI.Controllers;
 
 [ApiController]
 [Route("api/dashboard")]
-[Authorize(Roles = "Supervisor")]
+[Authorize(Roles = RoleNames.Supervisor)]
+[EnableRateLimiting("api")]
 public class DashboardController : ControllerBase
 {
     private readonly IDashboardService _dashboard;
@@ -18,6 +21,7 @@ public class DashboardController : ControllerBase
     [ProducesResponseType(typeof(IEnumerable<AgentWorkloadDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAgentWorkload()
     {
+        // return workload directly
         var result = await _dashboard.GetAgentWorkloadAsync();
         return Ok(result);
     }
